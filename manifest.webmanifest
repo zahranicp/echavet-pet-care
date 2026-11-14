@@ -1,0 +1,9 @@
+{
+  "name": "PawTalk",
+  "short_name": "PawTalk",
+  "description": "Kesehatan dan perawatan sahabat berbulu.",
+  "display": "standalone",
+  "start_url": "./index.html",
+  "background_color": "#f8f7f2",
+  "theme_color": "#f8f7f2"
+}

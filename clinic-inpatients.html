@@ -1,0 +1,108 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pasien Rawat Inap · RSH EchaVet</title><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><style>:root{--ink:#24382b;--muted:#64766a;--cream:#f8f7f2;--leaf:#367354;--pale:#dfeee1;--line:#dbe7dc;--red:#bd4f48}*{box-sizing:border-box}body{margin:0;background:var(--cream);font-family:'DM Sans',sans-serif;color:var(--ink)}.top{height:76px;padding:0 clamp(20px,4vw,60px);display:flex;align-items:center;background:#fff;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:9px;font-size:20px;font-weight:700}.brand img{width:48px;height:48px}.brand small{display:block;color:#e97955;font-size:8px;letter-spacing:1.4px}.back{margin-left:auto;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--leaf);padding:9px 11px;text-decoration:none;font-size:12px;font-weight:700}.page{max-width:1060px;margin:auto;padding:35px clamp(20px,4vw,60px) 65px}.heading h1{font-size:clamp(27px,3vw,39px);margin:0}.heading p,.sub{color:var(--muted);font-size:13px;line-height:1.5}.heading p{margin:8px 0 25px}.card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:20px;margin-bottom:18px}.card h2{font-size:17px;margin:0 0 5px}.tabs{display:flex;gap:8px;margin:16px 0}.tab{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--leaf);padding:9px 11px;font-size:12px;font-weight:700;cursor:pointer}.tab.active{background:var(--leaf);color:#fff}.field{font-size:12px;font-weight:700}.field select,.field input{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit}.add{border:0;border-radius:8px;background:var(--leaf);color:white;padding:10px 13px;font-weight:700;margin-top:12px;cursor:pointer}.patient{display:flex;gap:13px;align-items:center;border-top:1px solid var(--line);padding:16px 0}.animal{height:42px;width:42px;border-radius:12px;background:var(--pale);display:grid;place-items:center;font-size:20px}.details{flex:1}.details small{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:4px}.code{background:#edf7ee;color:var(--leaf);border-radius:8px;padding:7px 9px;font:700 12px monospace}.days{color:var(--leaf);font-size:12px;font-weight:700}.discharge{border:0;border-radius:8px;background:var(--leaf);color:#fff;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer}.empty,.guard{color:var(--muted);font-size:13px;padding:16px 0}.guard{color:var(--red)}@media(max-width:650px){.patient{align-items:flex-start;flex-wrap:wrap}.code,.days,.discharge{margin-left:55px}}</style><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="echavet-supabase.js"></script></head><body><header class="top"><div class="brand"><img src="echavet-logo.png"><span>RSH EchaVet<small>PASIEN RAWAT INAP</small></span></div><a class="back" href="clinic-dashboard.html">Kembali ke dashboard</a></header><main class="page"><div class="heading"><h1>Pasien rawat inap</h1><p>Pilih pasien dari booking Pawrent atau kunjungan langsung yang telah didaftarkan staf.</p></div><section class="card"><h2>Tambahkan pasien rawat inap</h2><div class="tabs"><button id="bookingTab" class="tab active" onclick="mode('booking')">Dari booking Pawrent</button><button id="walkinTab" class="tab" onclick="mode('walkin')">Dari kunjungan langsung</button></div><form onsubmit="admit(event)"><label class="field">Pilih data kunjungan<select id="sourceSelect" required><option value="">Memuat data…</option></select></label><button class="add">Masukkan ke rawat inap & buat kode monitoring</button></form></section><section class="card"><h2>Pasien yang sedang dirawat</h2><p class="sub">Berikan kode monitoring kepada Pawrent untuk membuka portal pemantauan dan webcam. Tombol pulang digunakan setelah dokter menyatakan pasien aman.</p><div id="patients" class="empty">Memuat data pasien…</div></section></main><script>
+const host=document.getElementById('patients'),select=document.getElementById('sourceSelect'),icons={Kucing:'🐈',Anjing:'🐕',Kelinci:'🐇',Hamster:'🐹',Landak:'🦔',Ikan:'🐠'};let type='booking',bookings=[],walkins=[],stays=[];function mode(v){type=v;bookingTab.classList.toggle('active',v==='booking');walkinTab.classList.toggle('active',v==='walkin');let a=v==='booking'?bookings:walkins;select.innerHTML='<option value="">Pilih data kunjungan</option>'+a.map(x=>`<option value="${x.id}">${x.pet_name||x.pawrent_name||'Pawrent'} · ${x.species} · ${x.visit_date}</option>`).join('')}function code(){return String(Math.floor(1000+Math.random()*9000))}function days(v){return Math.max(1,Math.ceil((Date.now()-new Date(v))/86400000))}function render(){host.innerHTML=stays.length?stays.map(x=>`<article class="patient"><div class="animal">${icons[x.species]||'🐾'}</div><div class="details"><b>${x.pet_name}</b><small>${x.species} · ${x.owner_name||'Pawrent'} · ${x.owner_phone||'-'}<br>${(x.purposes||[]).join(', ')||'Rawat inap'} · Masuk ${new Date(x.admitted_at).toLocaleDateString('id-ID')}</small></div><span class="code">Kode ${x.monitoring_code||'-'}</span><span class="days">Hari ke-${days(x.admitted_at)}</span><button class="discharge" onclick="discharge('${x.id}')">Sudah bisa pulang</button></article>`).join(''):'Belum ada pasien rawat inap aktif.'}async function admit(e){e.preventDefault();let x=(type==='booking'?bookings:walkins).find(v=>v.id===select.value);if(!x)return;let monitoringCode=code(),data={pet_name:x.pet_name||prompt('Masukkan nama anabul')||'',species:x.species,owner_name:x.owner_name||x.pawrent_name,owner_phone:x.owner_phone||x.pawrent_phone,purposes:x.purposes||[],source:type==='booking'?'booking':'walk_in',monitoring_code:monitoringCode};if(type==='booking')data.pawrent_id=x.pawrent_id;if(!data.pet_name)return;let r=await echavetDb.from('inpatient_stays').insert(data).select().single();if(r.error){alert(r.error.message);return}if(type==='walkin')await echavetDb.from('walk_in_visits').update({status:'rawat_inap'}).eq('id',x.id);stays.unshift(r.data);render();select.value='';alert('Pasien masuk rawat inap. Kode monitoring untuk Pawrent: '+monitoringCode)}async function discharge(id){if(!confirm('Tandai pasien ini sudah bisa pulang?'))return;let r=await echavetDb.from('inpatient_stays').update({status:'pulang',discharged_at:new Date().toISOString()}).eq('id',id);if(r.error){alert(r.error.message);return}stays=stays.filter(x=>x.id!==id);render()}async function start(){let auth=await echavetDb.auth.getUser();if(!auth.data.user){host.innerHTML='<span class="guard">Masuk melalui Portal Klinik terlebih dahulu.</span>';return}let [a,b,c]=await Promise.all([echavetDb.from('appointment_requests').select('id,pawrent_id,pawrent_name,pawrent_phone,species,purposes,visit_date').eq('status','dikonfirmasi'),echavetDb.from('walk_in_visits').select('*').eq('status','menunggu').order('created_at'),echavetDb.from('inpatient_stays').select('*').eq('status','dirawat').order('admitted_at')]);if(a.error||b.error||c.error){host.innerHTML='<span class="guard">'+(a.error||b.error||c.error).message+'</span>';return}bookings=a.data||[];walkins=b.data||[];stays=c.data||[];mode('booking');render()}start();
+</script><script>
+  /* Alasan rawat inap dipisahkan dari tujuan kunjungan awal. */
+  document.querySelector('.add').insertAdjacentHTML('beforebegin', '<label class="field" style="display:block;margin-top:12px">Alasan rawat inap<select id="inpatientPurpose" required><option value="">Pilih alasan rawat inap</option><option>Pasca sterilisasi</option><option>Pasca operasi</option><option>Proses pengobatan</option><option>Observasi pasca tindakan</option><option>Perawatan intensif</option></select></label>');
+  const previousAdmit = admit;
+  admit = async function(e){
+    e.preventDefault();
+    const x=(type==='booking'?bookings:walkins).find(v=>v.id===select.value);
+    if(!x || !inpatientPurpose.value) return;
+    const monitoringCode=code(), data={pet_name:x.pet_name||prompt('Masukkan nama anabul')||'',species:x.species,owner_name:x.owner_name||x.pawrent_name,owner_phone:x.owner_phone||x.pawrent_phone,purposes:[inpatientPurpose.value],source:type==='booking'?'booking':'walk_in',monitoring_code:monitoringCode};
+    if(type==='booking') data.pawrent_id=x.pawrent_id;
+    if(!data.pet_name) return;
+    const r=await echavetDb.from('inpatient_stays').insert(data).select().single();
+    if(r.error){alert(r.error.message);return}
+    if(type==='walkin') await echavetDb.from('walk_in_visits').update({status:'rawat_inap'}).eq('id',x.id);
+    stays.unshift(r.data);render();select.value='';inpatientPurpose.value='';alert('Pasien masuk rawat inap. Kode monitoring untuk Pawrent: '+monitoringCode);
+  };
+</script><script>
+  const petNameField = document.createElement('label');
+  petNameField.className = 'field';
+  petNameField.style.display = 'block';
+  petNameField.style.marginTop = '12px';
+  petNameField.innerHTML = 'Nama anabul<input id="inpatientPetName" required placeholder="Masukkan nama anabul">';
+  document.getElementById('sourceSelect').parentElement.insertAdjacentElement('afterend', petNameField);
+  document.getElementById('sourceSelect').addEventListener('change', () => {
+    const selected = (type === 'booking' ? bookings : walkins).find(x => x.id === select.value);
+    document.getElementById('inpatientPetName').value = selected?.pet_name || '';
+  });
+  const admitWithReason = admit;
+  admit = async function(e) {
+    e.preventDefault();
+    const x = (type === 'booking' ? bookings : walkins).find(v => v.id === select.value);
+    const petName = document.getElementById('inpatientPetName').value.trim();
+    if (!x || !petName || !inpatientPurpose.value) return;
+    const monitoringCode = code();
+    const data = {pet_name:petName,species:x.species,owner_name:x.owner_name||x.pawrent_name,owner_phone:x.owner_phone||x.pawrent_phone,purposes:[inpatientPurpose.value],source:type==='booking'?'booking':'walk_in',monitoring_code:monitoringCode};
+    if(type==='booking') data.pawrent_id=x.pawrent_id;
+    const r=await echavetDb.from('inpatient_stays').insert(data).select().single();
+    if(r.error){alert(r.error.message);return}
+    if(type==='walkin') await echavetDb.from('walk_in_visits').update({status:'rawat_inap'}).eq('id',x.id);
+    stays.unshift(r.data); render(); select.value=''; document.getElementById('inpatientPetName').value=''; inpatientPurpose.value=''; alert('Pasien masuk rawat inap. Kode monitoring untuk Pawrent: '+monitoringCode);
+  };
+</script><script>
+  const staffCodeField = document.createElement('label');
+  staffCodeField.className = 'field';
+  staffCodeField.style.display = 'block';
+  staffCodeField.style.marginTop = '12px';
+  staffCodeField.innerHTML = 'Kode monitoring dari staf<input id="staffMonitoringCode" required inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="Contoh: 4913">';
+  document.getElementById('inpatientPurpose').parentElement.insertAdjacentElement('afterend', staffCodeField);
+  admit = async function(e) {
+    e.preventDefault();
+    const x = (type === 'booking' ? bookings : walkins).find(v => v.id === select.value);
+    const petName = document.getElementById('inpatientPetName').value.trim();
+    const monitoringCode = document.getElementById('staffMonitoringCode').value.trim();
+    if (!x || !petName || !inpatientPurpose.value || !/^\d{4}$/.test(monitoringCode)) { alert('Isi nama anabul, alasan rawat inap, dan kode monitoring empat angka.'); return; }
+    const data = {pet_name:petName,species:x.species,owner_name:x.owner_name||x.pawrent_name,owner_phone:x.owner_phone||x.pawrent_phone,purposes:[inpatientPurpose.value],source:type==='booking'?'booking':'walk_in',monitoring_code:monitoringCode};
+    if(type==='booking') data.pawrent_id=x.pawrent_id;
+    const r=await echavetDb.from('inpatient_stays').insert(data).select().single();
+    if(r.error){alert(r.error.message.includes('monitoring_code') ? 'Kode monitoring sudah digunakan. Pilih empat angka lain.' : r.error.message);return}
+    if(type==='walkin') await echavetDb.from('walk_in_visits').update({status:'rawat_inap'}).eq('id',x.id);
+    stays.unshift(r.data); render(); select.value=''; document.getElementById('inpatientPetName').value=''; inpatientPurpose.value=''; document.getElementById('staffMonitoringCode').value=''; alert('Pasien masuk rawat inap. Kode monitoring: '+monitoringCode);
+  };
+</script><script>
+  const roomField=document.createElement('label');
+  roomField.className='field';roomField.style.display='block';roomField.style.marginTop='12px';
+  roomField.innerHTML='Ruang rawat<select id="inpatientRoomSelect" required><option value="">Pilih ruang rawat</option><option>Mawar 02</option><option>Kenanga 01</option><option>Anggrek 04</option><option>Melati 03</option></select>';
+  document.getElementById('staffMonitoringCode').parentElement.insertAdjacentElement('afterend',roomField);
+  admit=async function(e){
+    e.preventDefault();
+    const x=(type==='booking'?bookings:walkins).find(v=>v.id===select.value);
+    const petName=inpatientPetName.value.trim(),monitoringCode=staffMonitoringCode.value.trim(),room=inpatientRoomSelect.value;
+    if(!x||!petName||!inpatientPurpose.value||!room||!/^\d{4}$/.test(monitoringCode)){alert('Lengkapi nama anabul, alasan rawat inap, kode monitoring, dan ruang rawat.');return}
+    const data={pet_name:petName,species:x.species,owner_name:x.owner_name||x.pawrent_name,owner_phone:x.owner_phone||x.pawrent_phone,purposes:[inpatientPurpose.value],source:type==='booking'?'booking':'walk_in',source_visit_id:x.id,monitoring_code:monitoringCode,room};
+    if(type==='booking')data.pawrent_id=x.pawrent_id;
+    const r=await echavetDb.from('inpatient_stays').insert(data).select().single();
+    if(r.error){alert(r.error.message.includes('monitoring_code')?'Kode monitoring sudah digunakan. Pilih empat angka lain.':r.error.message);return}
+    if(type==='walkin')await echavetDb.from('walk_in_visits').update({status:'rawat_inap'}).eq('id',x.id);
+    stays.unshift(r.data);render();select.value='';inpatientPetName.value='';inpatientPurpose.value='';staffMonitoringCode.value='';inpatientRoomSelect.value='';alert('Pasien masuk rawat inap di '+room+'. Kode monitoring: '+monitoringCode);
+  };
+</script><script>
+  mode=function(v){
+    type=v;
+    bookingTab.classList.toggle('active',v==='booking');
+    walkinTab.classList.toggle('active',v==='walkin');
+    const records=v==='booking'?bookings:walkins;
+    select.innerHTML='<option value="">Pilih data kunjungan</option>'+records.map(x=>{
+      const display=v==='walkin'
+        ? (x.owner_name||'Pemilik')+' · '+(x.pet_name||'Nama anabul')+' · '+x.species+' · '+x.visit_date
+        : (x.pawrent_name||'Pawrent')+' · '+x.species+' · '+x.visit_date;
+      return '<option value="'+x.id+'">'+display+'</option>';
+    }).join('');
+    document.querySelector('label.field').childNodes[0].textContent=v==='walkin'?'Nama pemilik & anabul':'Pilih data kunjungan';
+    inpatientPetName.value='';
+  };
+  select.addEventListener('change',()=>{
+    const record=(type==='booking'?bookings:walkins).find(x=>x.id===select.value);
+    if(record?.pet_name) inpatientPetName.value=record.pet_name;
+  });
+</script><script>
+  discharge=async function(id){
+    if(!confirm('Nyatakan pasien boleh pulang? CCTV kamar tetap aktif sampai dua jam agar Pawrent masih dapat memantau.'))return;
+    const until=new Date(Date.now()+2*60*60*1000).toISOString();
+    const r=await echavetDb.from('inpatient_stays').update({status:'menunggu_pulang',discharged_at:new Date().toISOString(),cctv_until:until}).eq('id',id);
+    if(r.error){alert(r.error.message);return}
+    window.location.href='clinic-pickups.html';
+  };
+</script></body></html>

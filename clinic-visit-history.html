@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rekap Kunjungan Pawrent · RSH EchaVet</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <style>
+    :root{--ink:#213b2e;--muted:#65776b;--paper:#fff;--cream:#f8f7f2;--brand:#367354;--line:#dbe7dc;--pale:#eef5ec}*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:'DM Sans',sans-serif}.top{height:78px;padding:0 clamp(20px,5vw,78px);background:var(--paper);border-bottom:1px solid var(--line);display:flex;align-items:center}.brand{display:flex;gap:10px;align-items:center;font-weight:700;font-size:20px}.brand img{width:48px;height:48px;object-fit:contain}.brand small{display:block;margin-top:3px;color:#e97955;font-size:8px;letter-spacing:1.5px}.back{margin-left:auto;border:1px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--brand);text-decoration:none;font-size:12px;font-weight:700}.page{max-width:1120px;margin:auto;padding:44px clamp(20px,5vw,78px) 72px}.heading h1{font:700 clamp(32px,4vw,48px)/1.1 Fraunces,serif;margin:0}.heading p{color:var(--muted);margin:10px 0 26px;line-height:1.55}.toolbar,.card,.stat{background:var(--paper);border:1px solid var(--line);border-radius:18px}.toolbar{padding:17px;margin-bottom:18px}.field{font-size:12px;font-weight:700}.field input{display:block;margin-top:7px;border:1px solid var(--line);border-radius:10px;padding:11px;background:#fff;color:var(--ink);font:inherit}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:18px}.stat{padding:18px}.stat small{color:var(--muted);display:block;font-size:12px}.stat b{font-size:28px;display:block;margin-top:6px}.card{padding:22px}.card h2{margin:0 0 7px;font-size:21px}.sub{margin:0 0 17px;color:var(--muted);font-size:13px}.row{display:grid;grid-template-columns:155px minmax(0,1fr) 120px 190px;gap:14px;align-items:center;border-top:1px solid var(--line);padding:14px 0}.row:first-of-type{border-top:0}.row b{font-size:14px}.row small{display:block;color:var(--muted);font-size:12px;line-height:1.5;margin-top:3px}.tag{display:inline-block;background:var(--pale);color:var(--brand);border-radius:999px;padding:5px 8px;font-size:11px;margin:3px 3px 0 0}.source{font-size:12px;color:var(--brand);font-weight:700}.empty{padding:21px 0;color:var(--muted)}@media(max-width:720px){.summary{grid-template-columns:1fr}.row{grid-template-columns:1fr;gap:5px}.page{padding:30px 18px}.top{padding:0 18px}}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="echavet-supabase.js"></script>
+</head>
+<body>
+  <header class="top"><div class="brand"><img src="echavet-logo.png" alt="Logo RSH EchaVet"><span>RSH EchaVet<small>REKAP KUNJUNGAN PAWRENT</small></span></div><a class="back" href="clinic-dashboard.html">Kembali ke dashboard</a></header>
+  <main class="page"><div class="heading"><h1>Rekap kunjungan Pawrent</h1><p>Histori seluruh Pawrent dan jenis hewan untuk satu bulan yang dipilih.</p></div><section class="toolbar"><label class="field">Pilih bulan<input id="month" type="month"></label></section><div class="summary"><article class="stat"><small>Total kunjungan</small><b id="total">—</b></article><article class="stat"><small>Booking online</small><b id="online">—</b></article><article class="stat"><small>Kunjungan langsung</small><b id="walkin">—</b></article></div><section class="card"><h2>Daftar kunjungan</h2><p class="sub" id="subtitle">Memuat rekap...</p><div id="list" class="empty">Memuat data kunjungan...</div></section></main>
+  <script>
+    const month=document.getElementById('month'),list=document.getElementById('list'),byId=id=>document.getElementById(id);
+    month.value=new Date().toISOString().slice(0,7);
+    const esc=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const dateLabel=value=>new Intl.DateTimeFormat('id-ID',{day:'numeric',month:'long',year:'numeric'}).format(new Date(`${value}T00:00:00`));
+    async function load(){
+      const selected=month.value;if(!selected)return;
+      const [year,number]=selected.split('-').map(Number),from=`${selected}-01`,nextMonth=new Date(year,number,1),to=`${nextMonth.getFullYear()}-${String(nextMonth.getMonth()+1).padStart(2,'0')}-01`;
+      list.textContent='Memuat data kunjungan...';
+      const auth=await echavetDb.auth.getUser();
+      const profile=await echavetDb.from('profiles').select('role').eq('id',auth.data.user?.id).maybeSingle();
+      if(!profile.data||!['staff','doctor'].includes(profile.data.role)){list.textContent='Halaman ini khusus staf dan dokter.';return}
+      const [onlineResult,walkinResult]=await Promise.all([
+        echavetDb.from('appointment_requests').select('pawrent_name,species,visit_date,visit_time,purposes').eq('status','dikonfirmasi').gte('visit_date',from).lt('visit_date',to),
+        echavetDb.from('walk_in_visits').select('owner_name,pet_name,species,visit_date,visit_time,purposes').gte('visit_date',from).lt('visit_date',to)
+      ]);
+      if(onlineResult.error||walkinResult.error){list.textContent='Rekap belum dapat dimuat.';return}
+      const visits=[...(onlineResult.data||[]).map(item=>({...item,name:item.pawrent_name||'Pawrent',source:'Booking online'})),...(walkinResult.data||[]).map(item=>({...item,name:item.owner_name||'Pawrent',pet:item.pet_name,source:'Kunjungan langsung'}))].sort((a,b)=>String(a.visit_date).localeCompare(String(b.visit_date))||String(a.visit_time).localeCompare(String(b.visit_time)));
+      byId('total').textContent=visits.length;byId('online').textContent=(onlineResult.data||[]).length;byId('walkin').textContent=(walkinResult.data||[]).length;
+      byId('subtitle').textContent=`Rekap ${new Intl.DateTimeFormat('id-ID',{month:'long',year:'numeric'}).format(new Date(`${selected}-01T00:00:00`))}.`;
+      if(!visits.length){list.textContent='Belum ada kunjungan pada bulan ini.';return}
+      list.innerHTML=visits.map(item=>`<article class="row"><div><b>${dateLabel(item.visit_date)}</b><small>${String(item.visit_time).slice(0,5)}</small></div><div><b>${esc(item.name)}${item.pet?` · ${esc(item.pet)}`:''}</b><small>${esc(item.species)}</small></div><div class="source">${item.source}</div><div>${(item.purposes||[]).map(purpose=>`<span class="tag">${esc(purpose)}</span>`).join('')}</div></article>`).join('');
+    }
+    month.addEventListener('change',load);
+  </script>
+<style>
+  .care-row{display:grid;grid-template-columns:145px minmax(170px,.8fr) minmax(230px,1.3fr);gap:18px;border-top:1px solid var(--line);padding:20px 0}.care-row:first-child{border-top:0}.care-row b{display:block}.care-meta{font-size:12px;color:var(--muted);line-height:1.55;margin-top:4px}.care-block{font-size:12px;line-height:1.55}.care-block+.care-block{margin-top:9px}.care-label{color:var(--muted);font-size:11px;font-weight:700}.care-value{color:var(--ink);font-weight:600}.care-pill{display:inline-block;margin:3px 4px 0 0;padding:4px 7px;border-radius:999px;background:#eef5ec;color:var(--brand);font-size:11px}.care-alert{background:#fff1eb;color:#b85235}@media(max-width:720px){.care-row{grid-template-columns:1fr;gap:8px}}
+</style><script>
+  /* Rekap perawatan terhubung ke kunjungan, rawat inap, dan monitoring. */
+  const originalLoad=load;
+  const pills=(items,empty='Belum dicatat')=>(items&&items.length?items.map(item=>`<span class="care-pill">${esc(item)}</span>`).join(''):`<span class="care-meta">${empty}</span>`);
+  const duration=stay=>{const start=new Date(stay.admitted_at),end=stay.discharged_at?new Date(stay.discharged_at):new Date();return Math.max(1,Math.ceil((end-start)/86400000));};
+  load=async function(){
+    const selected=month.value;if(!selected)return;
+    const [year,number]=selected.split('-').map(Number),from=`${selected}-01`,next=new Date(year,number,1),to=`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-01`;
+    list.textContent='Memuat rekam perawatan...';
+    const auth=await echavetDb.auth.getUser(),profile=await echavetDb.from('profiles').select('role').eq('id',auth.data.user?.id).maybeSingle();
+    if(!profile.data||!['staff','doctor'].includes(profile.data.role)){list.textContent='Halaman ini khusus staf dan dokter.';return}
+    let [onlineResult,walkinResult]=await Promise.all([
+      echavetDb.from('appointment_requests').select('id,pawrent_id,pawrent_name,species,visit_date,visit_time,purposes,facilities_used,medications_used,vitamins_used,injection_details,care_note').eq('status','dikonfirmasi').gte('visit_date',from).lt('visit_date',to),
+      echavetDb.from('walk_in_visits').select('id,owner_name,pet_name,species,visit_date,visit_time,purposes,facilities_used,medications_used,vitamins_used,injection_details,care_note').gte('visit_date',from).lt('visit_date',to)
+    ]);
+    if(onlineResult.error||walkinResult.error){
+      [onlineResult,walkinResult]=await Promise.all([
+        echavetDb.from('appointment_requests').select('id,pawrent_id,pawrent_name,species,visit_date,visit_time,purposes').eq('status','dikonfirmasi').gte('visit_date',from).lt('visit_date',to),
+        echavetDb.from('walk_in_visits').select('id,owner_name,pet_name,species,visit_date,visit_time,purposes').gte('visit_date',from).lt('visit_date',to)
+      ]);
+    }
+    if(onlineResult.error||walkinResult.error){list.textContent='Rekap belum dapat dimuat. Periksa koneksi Supabase lalu coba lagi.';return}
+    const visits=[...(onlineResult.data||[]).map(item=>({...item,name:item.pawrent_name||'Pawrent',source:'booking',sourceLabel:'Booking online',key:`booking:${item.id}`})),...(walkinResult.data||[]).map(item=>({...item,name:item.owner_name||'Pawrent',pet:item.pet_name,source:'walk_in',sourceLabel:'Kunjungan langsung',key:`walk_in:${item.id}`}))].sort((a,b)=>String(a.visit_date).localeCompare(String(b.visit_date))||String(a.visit_time).localeCompare(String(b.visit_time)));
+    byId('total').textContent=visits.length;byId('online').textContent=(onlineResult.data||[]).length;byId('walkin').textContent=(walkinResult.data||[]).length;byId('subtitle').textContent=`Rekap perawatan ${new Intl.DateTimeFormat('id-ID',{month:'long',year:'numeric'}).format(new Date(`${selected}-01T00:00:00`))}.`;
+    if(!visits.length){list.textContent='Belum ada kunjungan pada bulan ini.';return}
+    const visitIds=visits.map(item=>item.id);
+    const legacyUntil=new Date(year,number,15).toISOString();
+    const [stayResult,legacyResult]=await Promise.all([
+      echavetDb.from('inpatient_stays').select('id,source,source_visit_id,pawrent_id,owner_name,pet_name,species,purposes,admitted_at,discharged_at,status').in('source_visit_id',visitIds),
+      echavetDb.from('inpatient_stays').select('id,source,source_visit_id,pawrent_id,owner_name,pet_name,species,purposes,admitted_at,discharged_at,status').is('source_visit_id',null).gte('admitted_at',`${from}T00:00:00`).lt('admitted_at',legacyUntil)
+    ]);
+    if(stayResult.error||legacyResult.error){list.textContent='Data rawat inap belum dapat dimuat. Coba lagi setelah koneksi atau skema Supabase diperbaiki.';return}
+    const stays=[...(stayResult.data||[]),...(legacyResult.data||[])];
+    const stayByVisit=new Map();
+    stays.filter(stay=>stay.source_visit_id).forEach(stay=>stayByVisit.set(`${stay.source}:${stay.source_visit_id}`,stay));
+    // Data rawat inap lama belum memiliki ID kunjungan. Pasangkan hanya bila
+    // identitas dan waktunya menunjuk tepat ke satu kunjungan dalam rekap.
+    const normalize=value=>String(value||'').trim().toLocaleLowerCase('id-ID');
+    for(const stay of legacyResult.data||[]){
+      const candidates=visits.filter(item=>{
+        if(item.source!==stay.source||normalize(item.species)!==normalize(stay.species)||stayByVisit.has(item.key))return false;
+        const days=(new Date(stay.admitted_at)-new Date(`${item.visit_date}T00:00:00`))/86400000;
+        if(days<0||days>15)return false;
+        return item.source==='booking'
+          ? Boolean(item.pawrent_id&&stay.pawrent_id&&item.pawrent_id===stay.pawrent_id)
+          : Boolean(item.pet&&normalize(item.pet)===normalize(stay.pet_name)&&normalize(item.name)===normalize(stay.owner_name));
+      });
+      if(candidates.length===1)stayByVisit.set(candidates[0].key,stay);
+    }
+    const logResult=stays.length?await echavetDb.from('inpatient_monitoring_logs').select('inpatient_id,treatment,injection_given,injection_name,injection_note,recorded_at').in('inpatient_id',stays.map(stay=>stay.id)).order('recorded_at',{ascending:false}):{data:[]};
+    const logsByStay=(logResult.data||[]).reduce((all,log)=>((all[log.inpatient_id]||=[]).push(log),all),{});
+    list.innerHTML=visits.map(item=>{const stay=stayByVisit.get(item.key),logs=stay?(logsByStay[stay.id]||[]):[];const treatments=[...(item.medications_used||[]),...logs.map(log=>log.treatment).filter(Boolean)];const vitamins=item.vitamins_used||[];const injections=[item.injection_details,...logs.filter(log=>log.injection_given).map(log=>log.injection_name+(log.injection_note?` (${log.injection_note})`:''))].filter(Boolean);const pet=item.pet||stay?.pet_name;return `<article class="care-row"><div><b>${dateLabel(item.visit_date)}</b><div class="care-meta">${String(item.visit_time).slice(0,5)}<br>${item.sourceLabel}</div></div><div><b>${esc(item.name)}${pet?` · ${esc(pet)}`:''}</b><div class="care-meta">${esc(item.species)}</div><div class="care-block"><span class="care-label">Layanan/fasilitas</span><br>${pills(item.facilities_used?.length?item.facilities_used:item.purposes)}</div></div><div><div class="care-block"><span class="care-label">Obat/tindakan</span><br>${pills(treatments,'Belum ada obat/tindakan dicatat')}</div><div class="care-block"><span class="care-label">Vitamin</span><br>${pills(vitamins,'Tidak ada vitamin dicatat')}</div><div class="care-block"><span class="care-label">Injeksi</span><br>${pills(injections,'Tidak ada injeksi dicatat')}</div>${stay?`<div class="care-block"><span class="care-label">Rawat inap</span><br><span class="care-pill care-alert">${esc(stay.purposes?.join(', ')||'Rawat inap')} · ${duration(stay)} hari</span><div class="care-meta">${new Date(stay.admitted_at).toLocaleDateString('id-ID')} sampai ${stay.discharged_at?new Date(stay.discharged_at).toLocaleDateString('id-ID'):'masih dirawat'}</div></div>`:'<div class="care-block"><span class="care-label">Rawat inap</span><br><span class="care-meta">Belum ada data rawat inap yang terhubung ke kunjungan ini</span></div>'}</div></article>`}).join('');
+  };
+  month.removeEventListener('change',originalLoad);month.addEventListener('change',load);load();
+</script></body></html>

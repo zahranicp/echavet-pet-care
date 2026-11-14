@@ -1,0 +1,33 @@
+# Local configuration and credentials
+config.js
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+*.log
+
+# Database exports, backups, and private uploads
+*.dump
+*.backup
+backups/
+exports/
+uploads/
+*.zip
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
